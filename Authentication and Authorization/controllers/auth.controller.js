@@ -1,5 +1,7 @@
 const User = require("../models/User.model.js");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
+const jwt=require("jsonwebtoken");
+require("dotenv").config();
 
 const signup = async(req,res) =>{
     try{
@@ -55,4 +57,69 @@ const signup = async(req,res) =>{
     }
 }
 
-module.exports = {signup}
+const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(401).json({
+                status: false,
+                message: "email and password are mandatory..!!!"
+            });
+        }
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(401).json({
+                status: false,
+                message: "user is not present..!!\nPlease signup first..!!"
+            });
+        }
+
+        const isPasswordCorrect = await bcrypt.compare(password, user.password);
+
+        console.log("Password match:", isPasswordCorrect);
+
+        if (!isPasswordCorrect) {
+            return res.status(401).json({
+                status: false,
+                message: "Incorrect Password..!!!"
+            });
+        }
+
+        const payLoad = {
+            email: user.email,
+            role: user.role,
+            id: user._id
+        };
+
+        const token = jwt.sign(payLoad, process.env.JWT_SECRET, {
+            expiresIn: "2h"
+        });
+
+        const userData = user.toObject();
+        userData.token = token;
+        userData.password = undefined;
+
+        const options = {
+            expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+            httpOnly: true,
+        };
+
+        return res.cookie("token", token, options).status(200).json({
+            status: true,
+            data: userData,
+            message: "User Logged in Successfully..!!!"
+        });
+
+    } catch (error) {
+        console.error("Login error:", error);
+        res.status(500).json({
+            status: false,
+            message: "User cannot be logged in..!!!"
+        });
+    }
+};
+
+module.exports = {signup,login}
